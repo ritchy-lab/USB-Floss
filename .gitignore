@@ -10,5 +10,6 @@ __pycache__/
 build/
 dist/
 *.spec
+!USB-Floss.spec
 # Icône macOS (généré)
 icon.iconset/

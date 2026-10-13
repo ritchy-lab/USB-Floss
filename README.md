@@ -10,6 +10,24 @@ recoins invisibles de la clé, là où l'utilisateur normal ne regarde
 pas. Et « FLOSS » veut aussi dire Free/Libre and Open Source Software —
 ce projet l'est.
 
+## Téléchargement
+
+La version prête à l'emploi (macOS, Apple Silicon) se trouve dans les
+[releases](https://github.com/ritchy-lab/USB-Floss/releases/latest) : télécharge le
+fichier `.zip`, décompresse-le, puis glisse **USB-Floss.app** dans ton dossier
+Applications.
+
+Au premier lancement, macOS prévient que l'application n'est pas signée par un
+certificat Apple payant. Pour l'ouvrir quand même : **clic droit sur l'app →
+Ouvrir**, puis confirme. Si macOS refuse encore (macOS 15 et suivants) :
+**Réglages Système → Confidentialité et sécurité**, puis « Ouvrir quand même »
+en bas de la fenêtre.
+
+> **Deux interfaces, deux dépôts.** USB-Floss, ici, est la version **simple et
+> compacte**. Pour une version plus visuelle (grand bouton et liste des fichiers
+> dans une fenêtre), voir
+> [USB-Floss Magic](https://github.com/ritchy-lab/USB-Floss-Magic).
+
 ## Le problème
 
 Quand on branche une clé USB sur un Mac, macOS y laisse des fichiers
@@ -22,6 +40,10 @@ cachés invisibles :
 - `.fseventsd/` — journal du système de fichiers
 - `.DocumentRevisions-V100/` — historique des versions
 - `.apdisk`, `.VolumeIcon.icns`, `.localized`, `.AppleDB`, etc.
+
+Une clé qui fait la navette récolte aussi des fichiers venus de l'autre côté :
+`Thumbs.db` et `Desktop.ini` (Windows), `.Trash-1000` (Linux). USB-Floss les
+nettoie également.
 
 Ces fichiers ne servent à rien sous Windows ou Linux. Ils encombrent
 la clé, polluent les listes de fichiers, et parfois empêchent une
@@ -110,6 +132,14 @@ Le script en ligne de commande (`usbfloss.py`) n'a **aucune**
 dépendance externe : il utilise uniquement la bibliothèque standard
 de Python.
 
+Pour construire l'application macOS et son zip de publication :
+
+    ./build.sh
+
+Le script compile dans un dossier temporaire, nettoie les attributs du Finder,
+signe le paquet, fabrique le zip puis le vérifie en l'extrayant — c'est la
+recette qui évite l'avertissement « application endommagée ».
+
 ## Comment retrouver le chemin d'une clé
 
 **macOS** : les clés sont montées dans `/Volumes/`. Pour voir la liste :
@@ -130,6 +160,12 @@ de Python.
   suppression est définitive. Les fichiers concernés n'ayant aucune
   valeur (ce sont des caches), il n'y a pas de risque de perte de
   données.
+
+## Soutenir le projet
+
+Cet utilitaire te sert ou te plaît ? Tu peux
+[m'offrir un café ☕](https://ko-fi.com/ritchy_lab) — c'est le bouton discret en
+bas à droite de la fenêtre.
 
 ## Licence
 
