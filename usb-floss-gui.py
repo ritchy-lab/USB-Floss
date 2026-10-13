@@ -873,7 +873,7 @@ class USBFlossApp(ctk.CTk):
 
         contenu = ctk.CTkScrollableFrame(
             popup, fg_color=BG_CARD, corner_radius=10,
-            scrollbar_button_color=CYAN_DARK, scrollbar_button_hover_color=CYAN,
+            scrollbar_button_color=CYAN, scrollbar_button_hover_color=CYAN_BRIGHT,
         )
         contenu.pack(fill="both", expand=True, padx=15, pady=(15, 8))
 
@@ -923,17 +923,34 @@ class USBFlossApp(ctk.CTk):
 
         popup.after(150, lambda: self._grab_popup(popup))
 
-        # customtkinter ne capte la molette que sur certains widgets : on la lie
-        # explicitement, ce qui couvre toute la fenêtre d'aide.
+        # customtkinter ne capte la molette que sur certains widgets, et avec une
+        # Magic Mouse (pas de molette, défilement très fin) les deltas valent ±1 :
+        # on lie donc nous-mêmes toute la fenêtre, et on garde le bon sens même
+        # pour un delta minuscule.
         def _molette(evenement):
             try:
-                contenu._parent_canvas.yview_scroll(
-                    -int(evenement.delta / 10) or -1, "units")
-            except Exception:
-                pass
+                delta = float(evenement.delta)
+            except (TypeError, ValueError):
+                return
+            if delta == 0:
+                return
+            pas = -delta / 10.0
+            if abs(pas) < 1:
+                pas = -1.0 if delta > 0 else 1.0
+            contenu._parent_canvas.yview_scroll(int(pas), "units")
 
-        for cible in (popup, contenu, *contenu.winfo_children()):
-            cible.bind("<MouseWheel>", _molette, add="+")
+        def _lier_molette(widget):
+            widget.bind("<MouseWheel>", _molette, add="+")
+            for enfant in widget.winfo_children():
+                _lier_molette(enfant)
+
+        _lier_molette(popup)
+
+        # Filet de sécurité : au clavier, ça marche avec n'importe quelle souris.
+        for touche, pas in (("<Up>", -2), ("<Down>", 2), ("<Prior>", -6),
+                            ("<Next>", 6), ("<Home>", -200), ("<End>", 200)):
+            popup.bind(touche, lambda e, n=pas: contenu._parent_canvas.yview_scroll(n, "units"),
+                       add="+")
 
     def _grab_popup(self, popup):
         if popup is None or not popup.winfo_exists():
