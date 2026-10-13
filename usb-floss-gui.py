@@ -7,6 +7,7 @@
 import logging
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -81,7 +82,7 @@ RESULTAT_DUREE = 6               # un message de résultat reste affiché 6 s
 # La liste vient du cœur (usbfloss.JUNK_DIRS) pour ne pas la recopier.
 PROTECTED_NAMES = set(JUNK_DIRS)
 
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 GITHUB_URL = "https://github.com/ritchy-lab/USB-Floss"
 KO_FI_URL = "https://ko-fi.com/ritchy_lab"
 CURSOR_HAND = "pointinghand" if sys.platform == "darwin" else "hand2"
@@ -100,35 +101,155 @@ def _couleur_moyenne(img, boite):
         return BG_MAIN
 
 
+def _langue_systeme():
+    """« fr » si le Mac est en français, « en » dans tous les autres cas."""
+    brut = ""
+    if sys.platform == "darwin":
+        try:
+            brut = subprocess.run(
+                ["defaults", "read", "-g", "AppleLanguages"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+        except Exception:
+            brut = ""
+    if not brut:
+        brut = os.environ.get("LANG") or os.environ.get("LC_ALL") or ""
+    trouve = re.search(r'"([^"]+)"', brut)      # « fr-FR » dans la liste des langues
+    code = trouve.group(1) if trouve else brut
+    return "fr" if code[:2].lower() == "fr" else "en"
+
+
+LANGUE = _langue_systeme()
+
+TEXTES = {
+    "fr": {
+        "attente": "En attente d'un volume…",
+        "aucun_volume": "Aucun volume détecté",
+        "aucun_volume_point": "Aucun volume détecté.",
+        "analyse": "Analyse en cours…",
+        "trouves": "{n} élément(s) trouvé(s)",
+        "que_proteges": "Rien à nettoyer : que des dossiers protégés.",
+        "propre": "Aucun fichier parasite. La clé est propre.",
+        "nettoyage": "Nettoyage en cours…",
+        "supprimes": "{ok} élément(s) supprimé(s) ✓",
+        "echecs": "{ok} supprimé(s), {ko} échec(s)",
+        "erreur_suppression": "Erreur pendant la suppression : {err}",
+        "nettoyer": "Nettoyer",
+        "nettoyer_ejecter": "Nettoyer et éjecter",
+        "eject_non_pris_en_charge": "Éjection non prise en charge sur ce système.",
+        "eject_delai": "La clé ne répond pas (délai de {n} s dépassé).",
+        "eject_impossible_detail": "Éjection impossible : {err}",
+        "eject_bloquee": "Une application bloque la clé : ferme-la pour la libérer.",
+        "eject_deja_retiree": "La clé a déjà été retirée.",
+        "eject_plus_montee": "La clé n'est plus montée.",
+        "eject_sans_reponse": "La clé ne répond pas.",
+        "eject_impossible_brut": "Éjection impossible.\n{extrait}",
+        "eject_impossible": "Éjection impossible.",
+        "soutenir_titre": "Soutenir le projet",
+        "soutenir_question": "Mon utilitaire te sert ou te plaît ?",
+        "soutenir_cafe": "Paye-moi un café  ☕",
+        "soutenir_oui": "Oui",
+        "soutenir_plus_tard": "Une prochaine fois",
+        "aide_titre": "À propos — USB-Floss",
+        "fermer": "Fermer",
+    },
+    "en": {
+        "attente": "Waiting for a drive…",
+        "aucun_volume": "No USB drive detected",
+        "aucun_volume_point": "No USB drive detected.",
+        "analyse": "Scanning…",
+        "trouves": "{n} item(s) found",
+        "que_proteges": "Nothing to clean: only protected folders.",
+        "propre": "No junk found. This drive is clean.",
+        "nettoyage": "Cleaning…",
+        "supprimes": "{ok} item(s) removed ✓",
+        "echecs": "{ok} removed, {ko} failed",
+        "erreur_suppression": "Error while deleting: {err}",
+        "nettoyer": "Clean",
+        "nettoyer_ejecter": "Clean and eject",
+        "eject_non_pris_en_charge": "Ejecting is not supported on this system.",
+        "eject_delai": "The drive is not responding ({n} s timeout).",
+        "eject_impossible_detail": "Could not eject: {err}",
+        "eject_bloquee": "An application is using the drive: close it to release it.",
+        "eject_deja_retiree": "The drive has already been removed.",
+        "eject_plus_montee": "The drive is no longer mounted.",
+        "eject_sans_reponse": "The drive is not responding.",
+        "eject_impossible_brut": "Could not eject.\n{extrait}",
+        "eject_impossible": "Could not eject.",
+        "soutenir_titre": "Support the project",
+        "soutenir_question": "Is this little tool useful to you?",
+        "soutenir_cafe": "Buy me a coffee  ☕",
+        "soutenir_oui": "Yes",
+        "soutenir_plus_tard": "Maybe next time",
+        "aide_titre": "About — USB-Floss",
+        "fermer": "Close",
+    },
+}
+
+
+def TR(cle, **valeurs):
+    """Texte dans la langue du système (l'anglais sert de secours)."""
+    texte = TEXTES[LANGUE].get(cle) or TEXTES["en"].get(cle) or cle
+    return texte.format(**valeurs) if valeurs else texte
+
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(SCRIPT_DIR, "logo.png")
 
-HELP_CONTENT = [
-    ("title", "USB-Floss"),
-    ("text", f"Version {APP_VERSION} — la version simple"),
-    ("space", ""),
-    ("text", "Nettoie une clé USB des fichiers inutiles laissés"),
-    ("text", "par macOS, Windows ou Linux."),
-    ("space", ""),
-    ("title2", "Comment l'utiliser"),
-    ("bullet", "1. Branche une clé USB."),
-    ("bullet", "2. Elle apparaît en haut, l'analyse se lance seule."),
-    ("bullet", "3. Clique sur Nettoyer."),
-    ("space", ""),
-    ("title2", "Fichiers ignorés"),
-    ("text", "Certains dossiers gérés par macOS (.Spotlight-V100,"),
-    ("text", ".Trashes, .fseventsd) sont marqués « ignoré » et laissés"),
-    ("text", "en place : ils ne gênent pas."),
-    ("space", ""),
-    ("title2", "Limite de taille"),
-    ("text", f"Seuls les volumes de moins de {MAX_VOLUME_SIZE_GB} Go sont"),
-    ("text", "proposés automatiquement."),
-    ("space", ""),
-    ("sep", ""),
-    ("donate", "☕  Soutenir le projet"),
-    ("credit", f"© 2026 — ritchy-lab — version {APP_VERSION}"),
-    ("link", GITHUB_URL.replace("https://", "")),
-]
+HELP_CONTENT = {
+    "fr": [
+        ("title", "USB-Floss"),
+        ("text", f"Version {APP_VERSION} — la version simple"),
+        ("space", ""),
+        ("text", "Nettoie une clé USB des fichiers inutiles laissés"),
+        ("text", "par macOS, Windows ou Linux."),
+        ("space", ""),
+        ("title2", "Comment l'utiliser"),
+        ("bullet", "1. Branche une clé USB."),
+        ("bullet", "2. Elle apparaît en haut, l'analyse se lance seule."),
+        ("bullet", "3. Clique sur Nettoyer."),
+        ("space", ""),
+        ("title2", "Fichiers ignorés"),
+        ("text", "Certains dossiers gérés par macOS (.Spotlight-V100,"),
+        ("text", ".Trashes, .fseventsd) sont marqués « ignoré » et laissés"),
+        ("text", "en place : ils ne gênent pas."),
+        ("space", ""),
+        ("title2", "Limite de taille"),
+        ("text", f"Seuls les volumes de moins de {MAX_VOLUME_SIZE_GB} Go sont"),
+        ("text", "proposés automatiquement."),
+        ("space", ""),
+        ("sep", ""),
+        ("donate", "☕  Soutenir le projet"),
+        ("credit", f"© 2026 — ritchy-lab — version {APP_VERSION}"),
+        ("link", GITHUB_URL.replace("https://", "")),
+    ],
+    "en": [
+        ("title", "USB-Floss"),
+        ("text", f"Version {APP_VERSION} — the simple one"),
+        ("space", ""),
+        ("text", "Cleans a USB drive of the useless files left behind"),
+        ("text", "by macOS, Windows and Linux."),
+        ("space", ""),
+        ("title2", "How to use it"),
+        ("bullet", "1. Plug in a USB drive."),
+        ("bullet", "2. It shows up at the top and the scan starts by itself."),
+        ("bullet", "3. Click Clean."),
+        ("space", ""),
+        ("title2", "Ignored files"),
+        ("text", "Some folders managed by macOS (.Spotlight-V100,"),
+        ("text", ".Trashes, .fseventsd) are marked \u201cignored\u201d and left"),
+        ("text", "in place: they are harmless."),
+        ("space", ""),
+        ("title2", "Size limit"),
+        ("text", f"Only drives smaller than {MAX_VOLUME_SIZE_GB} GB are"),
+        ("text", "offered automatically."),
+        ("space", ""),
+        ("sep", ""),
+        ("donate", "☕  Support the project"),
+        ("credit", f"© 2026 — ritchy-lab — version {APP_VERSION}"),
+        ("link", GITHUB_URL.replace("https://", "")),
+    ],
+}
 
 
 # ------------------------------------------------------------------
@@ -166,7 +287,7 @@ class USBFlossApp(ctk.CTk):
         self._font_vol = tkfont.Font(font=(FONT_MAIN, 13, "italic"))
         self._font_eject = tkfont.Font(font=(FONT_MAIN, 13))
         self._font_help = tkfont.Font(font=(FONT_MAIN, 13, "bold"))
-        self._vol_texte = "Aucun volume détecté"
+        self._vol_texte = TR("aucun_volume")
         self._vol_survol = False
         self._eject_survol = False
         self._help_survol = False
@@ -281,7 +402,7 @@ class USBFlossApp(ctk.CTk):
         self.panel.pack(fill="both", expand=True, padx=PAD, pady=(0, 10))
 
         self.message = ctk.CTkLabel(
-            self.panel, text="En attente d'un volume…",
+            self.panel, text=TR("attente"),
             font=(FONT_MAIN, 12, "italic"), text_color=ACCENT, anchor="w",
         )
         self.message.pack(fill="x", padx=12, pady=(10, 2))
@@ -302,7 +423,7 @@ class USBFlossApp(ctk.CTk):
         pied.pack(fill="x", padx=PAD, pady=(0, 12))
 
         self.btn_clean = ctk.CTkButton(
-            pied, text="Nettoyer", command=self.run_clean,
+            pied, text=TR("nettoyer"), command=self.run_clean,
             font=(FONT_MAIN, 13, "bold"), width=104, height=32,
             corner_radius=16, fg_color="transparent",
             border_color=BTN_DISABLED, border_width=1,
@@ -386,7 +507,7 @@ class USBFlossApp(ctk.CTk):
                           width=1)
         else:
             c.create_oval(1, y - 6, 13, y + 6, outline=couleur, width=2)
-        texte = "Nettoyer et éjecter"
+        texte = TR("nettoyer_ejecter")
         x = 13 + self.ESPACE_CERCLE_TEXTE + 1
         c.configure(width=x + self._font_eject.measure(texte))
         c.create_text(x, y, text=texte, font=self._font_eject,
@@ -453,8 +574,8 @@ class USBFlossApp(ctk.CTk):
 
         if not chemins:
             self.current_volume = None
-            self._set_volume_label("Aucun volume détecté")
-            self._show_message("Aucun volume détecté.", italique=True)
+            self._set_volume_label(TR("aucun_volume"))
+            self._show_message(TR("aucun_volume_point"), italique=True)
             return
 
         if self.current_volume not in chemins:
@@ -465,7 +586,7 @@ class USBFlossApp(ctk.CTk):
 
     def _volume_text(self):
         if self.current_volume is None:
-            return "Aucun volume détecté"
+            return TR("aucun_volume")
         return self.current_volume.name + ("  ▾" if len(self.volumes) > 1 else "")
 
     def _set_volume_label(self, texte):
@@ -592,14 +713,14 @@ class USBFlossApp(ctk.CTk):
         self._resultat = None
 
         if self.current_volume is None:
-            self._show_message("Aucun volume détecté.", italique=True)
+            self._show_message(TR("aucun_volume_point"), italique=True)
         elif n:
-            self._show_message(f"{n} élément(s) trouvé(s)", couleur=CYAN)
+            self._show_message(TR("trouves", n=n), couleur=CYAN)
         elif self.all_junk:
-            self._show_message("Rien à nettoyer : que des dossiers protégés.",
+            self._show_message(TR("que_proteges"),
                                italique=True)
         else:
-            self._show_message("Aucun fichier parasite. La clé est propre.",
+            self._show_message(TR("propre"),
                                italique=True)
 
     def _show_resultat(self, texte, couleur):
@@ -650,7 +771,7 @@ class USBFlossApp(ctk.CTk):
         volume = self.current_volume
         junk = list(self.current_junk)
         self._busy = True
-        self._show_message("Nettoyage en cours…", italique=True)
+        self._show_message(TR("nettoyage"), italique=True)
         self.btn_clean.configure(state="disabled")
         self._refresh_clean_button()
         threading.Thread(
@@ -675,11 +796,11 @@ class USBFlossApp(ctk.CTk):
         self._set_junk([])
 
         if erreur:
-            self._show_resultat(f"Erreur pendant la suppression : {erreur}", RED)
+            self._show_resultat(TR("erreur_suppression", err=erreur), RED)
         elif ko == 0:
-            self._show_resultat(f"{ok} élément(s) supprimé(s) ✓", ACCENT)
+            self._show_resultat(TR("supprimes", ok=ok), ACCENT)
         else:
-            self._show_resultat(f"{ok} supprimé(s), {ko} échec(s)", WARN)
+            self._show_resultat(TR("echecs", ok=ok, ko=ko), WARN)
 
         if erreur_ejection:
             self._show_resultat(erreur_ejection, WARN)
@@ -696,16 +817,16 @@ class USBFlossApp(ctk.CTk):
     # ------------------------------------------------------------------
     def _eject_volume(self, volume):
         if sys.platform != "darwin":
-            return "Éjection non prise en charge sur ce système."
+            return TR("eject_non_pris_en_charge")
         try:
             res = subprocess.run(
                 ["diskutil", "eject", str(volume)],
                 capture_output=True, text=True, timeout=EJECT_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            return f"La clé ne répond pas (délai de {EJECT_TIMEOUT} s dépassé)."
+            return TR("eject_delai", n=EJECT_TIMEOUT)
         except Exception as e:
-            return f"Éjection impossible : {e}"
+            return TR("eject_impossible_detail", err=e)
 
         if res.returncode != 0:
             return self._translate_eject_error(res.stderr or res.stdout or "")
@@ -714,15 +835,15 @@ class USBFlossApp(ctk.CTk):
     def _translate_eject_error(self, brut):
         bas = brut.lower()
         if "could not be unmounted" in bas or "dissent" in bas:
-            return "Une application bloque la clé : ferme-la pour la libérer."
+            return TR("eject_bloquee")
         if "was not found" in bas or "no such file" in bas:
-            return "La clé a déjà été retirée."
+            return TR("eject_deja_retiree")
         if "not mounted" in bas:
-            return "La clé n'est plus montée."
+            return TR("eject_plus_montee")
         if "timeout" in bas:
-            return "La clé ne répond pas."
+            return TR("eject_sans_reponse")
         extrait = brut.strip()[:160]
-        return f"Éjection impossible.\n{extrait}" if extrait else "Éjection impossible."
+        return TR("eject_impossible_brut", extrait=extrait) if extrait else TR("eject_impossible")
 
     # ------------------------------------------------------------------
     # Fenêtre d'aide
@@ -738,7 +859,7 @@ class USBFlossApp(ctk.CTk):
 
         popup = ctk.CTkToplevel(self)
         self._help_popup = popup
-        popup.title("À propos — USB-Floss")
+        popup.title(TR("aide_titre"))
         popup.resizable(False, False)
         popup.transient(self)
         popup.configure(fg_color=BG_MAIN)
@@ -756,7 +877,7 @@ class USBFlossApp(ctk.CTk):
         )
         contenu.pack(fill="both", expand=True, padx=15, pady=(15, 8))
 
-        for kind, txt in HELP_CONTENT:
+        for kind, txt in HELP_CONTENT[LANGUE]:
             if kind == "space":
                 ctk.CTkLabel(contenu, text="", height=6).pack()
             elif kind == "title":
@@ -794,13 +915,25 @@ class USBFlossApp(ctk.CTk):
                              justify="left").pack(fill="x")
 
         ctk.CTkButton(
-            popup, text="Fermer", font=(FONT_MAIN, 13, "bold"),
+            popup, text=TR("fermer"), font=(FONT_MAIN, 13, "bold"),
             width=140, height=36, corner_radius=18, fg_color="transparent",
             border_color=CYAN_BRIGHT, border_width=1, text_color=TEXT_WHITE,
             hover_color=CYAN_HOVER, command=popup.destroy,
         ).pack(pady=(0, 15))
 
         popup.after(150, lambda: self._grab_popup(popup))
+
+        # customtkinter ne capte la molette que sur certains widgets : on la lie
+        # explicitement, ce qui couvre toute la fenêtre d'aide.
+        def _molette(evenement):
+            try:
+                contenu._parent_canvas.yview_scroll(
+                    -int(evenement.delta / 10) or -1, "units")
+            except Exception:
+                pass
+
+        for cible in (popup, contenu, *contenu.winfo_children()):
+            cible.bind("<MouseWheel>", _molette, add="+")
 
     def _grab_popup(self, popup):
         if popup is None or not popup.winfo_exists():
@@ -822,7 +955,7 @@ class USBFlossApp(ctk.CTk):
 
         popup = ctk.CTkToplevel(self)
         self._donate_popup = popup
-        popup.title("Soutenir le projet")
+        popup.title(TR("soutenir_titre"))
         popup.resizable(False, False)
         popup.transient(self)
         popup.configure(fg_color=BG_MAIN)
@@ -830,12 +963,12 @@ class USBFlossApp(ctk.CTk):
 
         largeur = 380
         ctk.CTkLabel(
-            popup, text="Mon utilitaire te sert ou te plaît ?",
+            popup, text=TR("soutenir_question"),
             font=(FONT_MAIN, 16, "normal"), text_color=TEXT_WHITE,
             wraplength=largeur - 50, justify="center",
         ).pack(padx=25, pady=(26, 6))
         ctk.CTkLabel(
-            popup, text="Paye-moi un café  ☕",
+            popup, text=TR("soutenir_cafe"),
             font=(FONT_MAIN, 14), text_color=LINK_COLOR,
         ).pack()
 
@@ -843,14 +976,14 @@ class USBFlossApp(ctk.CTk):
         boutons.pack(pady=(24, 26))
 
         ctk.CTkButton(
-            boutons, text="Oui", command=self._donate_oui,
+            boutons, text=TR("soutenir_oui"), command=self._donate_oui,
             font=(FONT_MAIN, 13, "bold"), width=96, height=32,
             corner_radius=16, fg_color="transparent",
             border_color=CYAN_BRIGHT, border_width=1,
             text_color=TEXT_WHITE, hover_color="#123240",
         ).pack(side="left", padx=7)
         ctk.CTkButton(
-            boutons, text="Une prochaine fois", command=popup.destroy,
+            boutons, text=TR("soutenir_plus_tard"), command=popup.destroy,
             font=(FONT_MAIN, 12), width=170, height=32,
             corner_radius=16, fg_color="transparent",
             border_color=BTN_DISABLED, border_width=1,

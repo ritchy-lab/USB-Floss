@@ -1,5 +1,7 @@
 <img src="logo.png" alt="USB-Floss" width="800">
 
+🇬🇧 **[English version](README.en.md)**
+
 # USB-Floss
 
 Un petit utilitaire qui nettoie les fichiers inutiles créés par macOS
