@@ -42,6 +42,10 @@ en bas de la fenêtre.
 
 ![USB-Floss : 17 fichiers parasites détectés sur la clé DRIVE64](screenshot.png)
 
+## En action
+
+![USB-Floss en action : la clé est détectée, 71 fichiers trouvés, un clic et la clé est nettoyée](demo.gif)
+
 ## Le problème
 
 Quand on branche une clé USB sur un Mac, macOS y laisse des fichiers

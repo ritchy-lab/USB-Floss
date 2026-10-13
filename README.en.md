@@ -38,6 +38,10 @@ Security**, then "Open Anyway" at the bottom of the window.
 
 ![USB-Floss: 17 junk files found on the DRIVE64 drive](screenshot.png)
 
+## In action
+
+![USB-Floss in action: the drive is detected, 71 files found, one click and the drive is cleaned](demo.gif)
+
 ## The problem
 
 When you plug a USB drive into a Mac, macOS leaves hidden files on it:
