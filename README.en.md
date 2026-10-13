@@ -13,6 +13,14 @@ Source Software — which this project is.
 
 ## Download
 
+**With Homebrew:**
+
+```bash
+brew install --cask ritchy-lab/tap/usb-floss
+```
+
+**Or manually:**
+
 The ready-to-use version (macOS, Apple Silicon) is available in the
 [releases](https://github.com/ritchy-lab/USB-Floss/releases/latest): download the
 `.zip`, unzip it, then drag **USB-Floss.app** into your Applications folder.
