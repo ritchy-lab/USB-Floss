@@ -130,6 +130,14 @@ USB-Floss detects them and lists them, but marks them `(ignored)` and does not
 try to delete them. That is normal: macOS will recreate them the next time the
 drive is plugged in, and they do not get in the way on a PC.
 
+## Help
+
+The application explains what it does: click the **?** at the top left. You will
+find how to use it, which files are ignored and why, and the size limit for the
+drives it offers.
+
+<img src="aide.png" alt="The USB-Floss help window" width="440">
+
 ## Installation
 
 **Requirement:** Python 3.10 or later.

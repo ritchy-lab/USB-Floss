@@ -138,6 +138,14 @@ ne tente pas de les supprimer. C'est normal : macOS les recréera de
 toute façon au prochain branchement, et ils ne gênent en rien
 l'utilisation de la clé sur un PC.
 
+## L'aide
+
+L'application explique elle-même ce qu'elle fait : clique sur le **?** en haut à
+gauche. Tu y trouveras comment l'utiliser, quels fichiers sont ignorés et
+pourquoi, et la limite de taille des volumes proposés.
+
+<img src="aide.png" alt="La fenêtre d'aide de USB-Floss" width="440">
+
 ## Installation
 
 **Prérequis :** Python 3.10 ou supérieur.
