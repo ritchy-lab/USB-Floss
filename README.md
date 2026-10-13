@@ -28,6 +28,10 @@ en bas de la fenêtre.
 > dans une fenêtre), voir
 > [USB-Floss Magic](https://github.com/ritchy-lab/USB-Floss-Magic).
 
+## Aperçu
+
+![USB-Floss : 17 fichiers parasites détectés sur la clé DRIVE64](screenshot.png)
+
 ## Le problème
 
 Quand on branche une clé USB sur un Mac, macOS y laisse des fichiers
