@@ -190,8 +190,9 @@ recette qui évite l'avertissement « application endommagée ».
 ## Soutenir le projet
 
 Cet utilitaire te sert ou te plaît ? Tu peux
-[m'offrir un café ☕](https://ko-fi.com/ritchy_lab) — c'est le bouton discret en
-bas à droite de la fenêtre.
+[m'offrir un café ☕](https://ko-fi.com/ritchy_lab) — c'est le logo Ko-fi, en bas
+à gauche de la fenêtre. La signature « ritchy-lab », en bas à droite, mène au
+[site qui présente mes trois applications](https://ritchy-lab.github.io/).
 
 ## Licence
 

@@ -40,7 +40,17 @@ JUNK_DIRS = {
 
 JUNK_PREFIXES = (
     "._",
+    # Corbeille d'une clé Linux : le nom porte le numéro de l'utilisateur
+    # (.Trash-1000, .Trash-501…). Un dossier, donc à traiter par préfixe.
+    ".Trash-",
 )
+
+# Comparaison insensible à la casse : Windows écrit « desktop.ini » en
+# minuscules, et une clé FAT peut renvoyer n'importe quelle casse.
+# Les listes publiques ci-dessus restent lisibles ; on compare en minuscules.
+_JUNK_FILES_LC = frozenset(nom.lower() for nom in JUNK_FILES)
+_JUNK_DIRS_LC = frozenset(nom.lower() for nom in JUNK_DIRS)
+_JUNK_PREFIXES_LC = tuple(prefixe.lower() for prefixe in JUNK_PREFIXES)
 
 # Sur macOS, les volumes externes sont montés dans /Volumes.
 VOLUMES_DIR = Path("/Volumes")
@@ -57,11 +67,21 @@ EXCLUDED_NAMES = {
 
 def _is_junk_name(name: str, is_dir: bool) -> bool:
     """Test interne : le nom et le type suffisent, sans toucher au disque."""
-    if name in JUNK_FILES:
+    bas = name.lower()
+    if bas in _JUNK_FILES_LC:
         return True
-    if is_dir and name in JUNK_DIRS:
+    if is_dir and bas in _JUNK_DIRS_LC:
         return True
-    return name.startswith(JUNK_PREFIXES)
+    return bas.startswith(_JUNK_PREFIXES_LC)
+
+
+def is_protected_name(name: str) -> bool:
+    """True si ce nom désigne un dossier système géré par macOS.
+
+    Ces dossiers sont signalés dans la liste, mais jamais supprimés : ils ne
+    gênent pas, et macOS les recrée de toute façon au prochain branchement.
+    """
+    return name.lower() in _JUNK_DIRS_LC
 
 
 def is_junk(path: Path) -> bool:
@@ -75,9 +95,9 @@ def scan(root: Path) -> list[Path]:
     On utilise os.walk plutôt que Path.rglob, pour deux raisons :
       - on ne fabrique un objet Path que pour les candidats (rglob en crée un
         pour chaque fichier du disque, ce qui est lent sur une grosse clé) ;
-      - on refuse de descendre dans les dossiers protégés (.Spotlight-V100,
-        .Trashes...), qui ne contiennent rien à nettoyer. Ces dossiers sont
-        quand même signalés, pour que l'interface les affiche « ignorés ».
+      - on refuse de descendre dans les dossiers parasites (.Spotlight-V100,
+        .Trashes, .Trash…). Les dossiers protégés sont quand même signalés,
+        pour que l'interface les affiche « ignorés ».
     """
     junk: list[Path] = []
 
@@ -88,8 +108,11 @@ def scan(root: Path) -> list[Path]:
             if _is_junk_name(name, True):
                 junk.append(base / name)
 
-        # On retire les dossiers protégés du parcours : on n'y entre jamais.
-        dirnames[:] = [d for d in dirnames if d not in JUNK_DIRS]
+        # On ne descend jamais dans un dossier déjà signalé, protégé ou non :
+        # un dossier protégé ne contient rien à nettoyer, et un dossier
+        # parasite (.Trash, .Trashes…) sera supprimé en entier — inutile de
+        # lister son contenu en double.
+        dirnames[:] = [d for d in dirnames if not _is_junk_name(d, True)]
 
         for name in filenames:
             if _is_junk_name(name, False):

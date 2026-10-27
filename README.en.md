@@ -178,8 +178,9 @@ recipe that avoids the "application is damaged" warning.
 ## Support the project
 
 Is this little tool useful to you? You can
-[buy me a coffee ☕](https://ko-fi.com/ritchy_lab) — it is the discreet button at
-the bottom right of the window.
+[buy me a coffee ☕](https://ko-fi.com/ritchy_lab) — that is the Ko-fi logo in the
+bottom left corner of the window. The “ritchy-lab” signature in the bottom right
+corner leads to [the site presenting my three applications](https://ritchy-lab.github.io/).
 
 ## Licence
 

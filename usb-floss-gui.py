@@ -17,13 +17,13 @@ import tkinter.font as tkfont
 import webbrowser
 
 import customtkinter as ctk
-from PIL import Image
+from PIL import Image, ImageChops
 
 from usbfloss import (
-    JUNK_DIRS,
     MAX_VOLUME_SIZE_GB,
     delete,
     format_size,
+    is_protected_name,
     list_volumes,
     scan,
 )
@@ -79,12 +79,14 @@ MAX_ROWS = 2000                  # lignes affichées au maximum
 RESULTAT_DUREE = 6               # un message de résultat reste affiché 6 s
 
 # Dossiers gérés par macOS : signalés mais jamais supprimés.
-# La liste vient du cœur (usbfloss.JUNK_DIRS) pour ne pas la recopier.
-PROTECTED_NAMES = set(JUNK_DIRS)
+# La liste vit dans le cœur (usbfloss.JUNK_DIRS) : on la lui demande, pour ne
+# pas la recopier ici et pour profiter de sa comparaison insensible à la casse.
 
 APP_VERSION = "1.3"
 GITHUB_URL = "https://github.com/ritchy-lab/USB-Floss"
+SITE_URL = "https://ritchy-lab.github.io/"
 KO_FI_URL = "https://ko-fi.com/ritchy_lab"
+KO_FI_HAUTEUR = 18          # hauteur de la tasse TELLE QU'ON LA VOIT (px)
 CURSOR_HAND = "pointinghand" if sys.platform == "darwin" else "hand2"
 
 def _couleur_moyenne(img, boite):
@@ -195,6 +197,31 @@ def TR(cle, **valeurs):
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(SCRIPT_DIR, "logo.png")
+KO_FI_IMAGE = os.path.join(SCRIPT_DIR, "kofi.png")
+KO_FI_IMAGE_SURVOL = os.path.join(SCRIPT_DIR, "kofi-survol.png")
+
+
+def _encre_visible(img):
+    """Boîte de ce qui se voit vraiment sur un fond noir.
+
+    Le logo noir de Ko-fi a un corps noir : sur notre fond noir, cette partie
+    est invisible. Seuls l'auréole claire et le cœur rouge comptent, et c'est
+    cette mesure-là qui doit servir à dimensionner les deux versions, sinon la
+    tasse changerait de taille au survol.
+    """
+    clair = img.convert("L").point(lambda v: 255 if v > 50 else 0)
+    opaque = img.getchannel("A").point(lambda v: 255 if v > 40 else 0)
+    return ImageChops.multiply(clair, opaque).getbbox()
+
+
+def _tasse(chemin, hauteur):
+    """Charge une version du logo, ne garde que le visible, cale sa hauteur."""
+    img = Image.open(chemin).convert("RGBA")
+    boite = _encre_visible(img)
+    if boite:
+        img = img.crop(boite)
+    largeur = max(1, round(img.width * hauteur / img.height))
+    return img.resize((largeur, hauteur), Image.LANCZOS)
 
 HELP_CONTENT = {
     "fr": [
@@ -277,7 +304,16 @@ class USBFlossApp(ctk.CTk):
         self._busy = False
         self._closing = False
         self._logo_image = None
+        self._kofi_images = None
+        self._kofi_largeur = 0
+        self.kofi_btn = None
         self._help_popup = None
+        self._help_canvas = None
+        self._help_scroll_acc = 0.0
+        try:
+            self.bind_all("<TouchpadScroll>", self._on_help_scroll, add="+")
+        except tk.TclError:
+            pass  # Tk 8.6 : événement inconnu, <MouseWheel> suffit
         self._donate_popup = None
         self._resultat = None
         self._resultat_temps = 0.0
@@ -304,6 +340,7 @@ class USBFlossApp(ctk.CTk):
 
         # La fenêtre prend juste la hauteur nécessaire : compacte.
         self.update_idletasks()
+        self._aligner_kofi()
         hauteur = max(self.winfo_reqheight(), 360)
         x = (self.winfo_screenwidth() - WIN_W) // 2
         y = (self.winfo_screenheight() - hauteur) // 3
@@ -437,13 +474,88 @@ class USBFlossApp(ctk.CTk):
 
         self.signature = ctk.CTkLabel(
             pied, text="ritchy-lab", font=(FONT_MAIN, 12), text_color=TEXT_DIM,
+            cursor=CURSOR_HAND,
         )
         self.signature.place(relx=1.0, rely=0.5, anchor="e")
-        self.signature.bind("<Button-1>", lambda e: self._open_donate())
-        self.signature.bind(
-            "<Enter>", lambda e: self.signature.configure(text_color=CYAN))
-        self.signature.bind(
-            "<Leave>", lambda e: self.signature.configure(text_color=TEXT_DIM))
+        # La signature mène au site, qui présente les trois applications.
+        self.signature.bind("<Button-1>", lambda e: self._open_link(SITE_URL))
+        self.signature.bind("<Enter>", lambda e: self._survol_signature(True))
+        self.signature.bind("<Leave>", lambda e: self._survol_signature(False))
+
+        # Logo Ko-fi, en bas à gauche — à l'opposé de la signature.
+        # C'est lui qui ouvre « Soutenir le projet ».
+        self.kofi_btn = self._build_kofi_logo(pied)
+
+    def _survol_signature(self, actif):
+        """Un lien se reconnaît : il s'éclaircit et se souligne au survol."""
+        self.signature.configure(
+            text_color=CYAN if actif else TEXT_DIM,
+            font=(FONT_MAIN, 12, "underline") if actif else (FONT_MAIN, 12),
+        )
+
+    def _preparer_kofi(self):
+        """Prépare les deux versions du logo, sur un canevas identique.
+
+        Canevas identique = au survol, rien ne bouge : seule la tasse change
+        d'aspect (contour clair → tasse claire).
+        """
+        if not (os.path.exists(KO_FI_IMAGE) and os.path.exists(KO_FI_IMAGE_SURVOL)):
+            return None
+        try:
+            repos = _tasse(KO_FI_IMAGE, KO_FI_HAUTEUR)
+            survol = _tasse(KO_FI_IMAGE_SURVOL, KO_FI_HAUTEUR)
+        except Exception as e:
+            log.warning("Erreur chargement logo Ko-fi : %s", e)
+            return None
+
+        largeur = max(repos.width, survol.width)
+        hauteur = max(repos.height, survol.height)
+        versions = []
+        for img in (repos, survol):
+            # Aplati sur le fond de la fenêtre : aucune frange, et un CTkLabel
+            # n'a pas à composer de transparence.
+            fond = Image.new("RGBA", (largeur, hauteur), BG_MAIN)
+            fond.alpha_composite(img, ((largeur - img.width) // 2,
+                                       (hauteur - img.height) // 2))
+            fond = fond.convert("RGB")
+            versions.append(ctk.CTkImage(light_image=fond, dark_image=fond,
+                                         size=(largeur, hauteur)))
+        return versions
+
+    def _build_kofi_logo(self, parent):
+        """Le logo Ko-fi en bas à gauche, ou un simple « ☕ Ko-fi » sans image."""
+        versions = self._preparer_kofi()
+        if versions:
+            self._kofi_images = versions        # référence : sinon, images effacées
+            repos, survol = versions
+        else:
+            repos = survol = None
+
+        bouton = ctk.CTkLabel(
+            parent, text="☕ Ko-fi" if repos is None else "", image=repos,
+            font=(FONT_MAIN, 12), text_color=TEXT_DIM, cursor=CURSOR_HAND,
+        )
+        bouton.place(relx=0.0, rely=0.5, anchor="w")
+        bouton.bind("<Button-1>", lambda e: self._open_donate())
+        if survol is not None:
+            # Le survol change l'image elle-même : pas de cadre, pas de filet.
+            bouton.bind("<Enter>", lambda e: bouton.configure(image=survol))
+            bouton.bind("<Leave>", lambda e: bouton.configure(image=repos))
+        self._kofi_largeur = repos.cget("size")[0] if repos else 0
+        return bouton
+
+    def _aligner_kofi(self):
+        """Aligne le logo sur les icônes des rangées du dessus.
+
+        Un CTkLabel garde une petite marge interne autour de son image (8 px) :
+        sans correction, le logo commencerait 8 px plus à droite que le rond de
+        la clé. On mesure cette marge et on décale d'autant.
+        """
+        if not self._kofi_largeur:
+            return
+        marge = (self.kofi_btn.winfo_reqwidth() - self._kofi_largeur) // 2
+        if marge > 0:
+            self.kofi_btn.place_configure(x=-marge)
 
     def _set_survol_nettoyer(self, actif):
         self._survol_nettoyer = actif
@@ -692,7 +804,7 @@ class USBFlossApp(ctk.CTk):
             self._request_scan()
 
     def _is_protected(self, path):
-        return path.name in PROTECTED_NAMES
+        return is_protected_name(path.name)
 
     def _set_junk(self, junk):
         self.all_junk = list(junk)
@@ -851,6 +963,32 @@ class USBFlossApp(ctk.CTk):
     def _open_link(self, url):
         webbrowser.open(url)
 
+    def _on_help_scroll(self, event):
+        """Défilement trackpad / Magic Mouse (Tk 9 : <TouchpadScroll>)."""
+        pop, cv = self._help_popup, self._help_canvas
+        if pop is None or cv is None or not pop.winfo_exists():
+            return
+        # Seulement quand le pointeur est sur la fenêtre d'aide
+        if not str(event.widget).startswith(str(pop)):
+            return
+        try:
+            dx, dy = (int(str(v)) for v in self.tk.splitlist(
+                self.tk.call("tk::PreciseScrollDeltas", event.delta)))
+        except Exception:
+            try:
+                dy = int(event.delta)
+            except (TypeError, ValueError):
+                return
+        if dy == 0:
+            return
+        # On cumule les petits gestes : le canvas avance par pas de plusieurs pixels
+        step = int(str(cv.cget("yscrollincrement"))) or 1
+        self._help_scroll_acc += -dy
+        units = int(self._help_scroll_acc / step)
+        if units:
+            cv.yview_scroll(units, "units")
+            self._help_scroll_acc -= units * step
+
     def _open_help(self):
         if self._help_popup is not None and self._help_popup.winfo_exists():
             self._help_popup.lift()
@@ -876,6 +1014,7 @@ class USBFlossApp(ctk.CTk):
             scrollbar_button_color=CYAN, scrollbar_button_hover_color=CYAN_BRIGHT,
         )
         contenu.pack(fill="both", expand=True, padx=15, pady=(15, 8))
+        self._help_canvas = contenu._parent_canvas
 
         for kind, txt in HELP_CONTENT[LANGUE]:
             if kind == "space":

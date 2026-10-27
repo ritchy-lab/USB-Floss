@@ -7,7 +7,13 @@ Lance-les avec :   python3 test_usbfloss.py
 import tempfile
 from pathlib import Path
 
-from usbfloss import delete, is_dangerous_root, is_junk, scan
+from usbfloss import (
+    delete,
+    is_dangerous_root,
+    is_junk,
+    is_protected_name,
+    scan,
+)
 
 
 def test_is_junk_reconnait_les_fichiers_parasites():
@@ -17,6 +23,27 @@ def test_is_junk_reconnait_les_fichiers_parasites():
     assert is_junk(Path("/Volumes/CLE/Photos/._vacances.jpg"))
     assert not is_junk(Path("/Volumes/CLE/Photos/vacances.jpg"))
     assert not is_junk(Path("/Volumes/CLE/rapport.pdf"))
+
+
+def test_is_junk_ne_depend_pas_de_la_casse():
+    # Windows écrit « desktop.ini » en minuscules ; une clé FAT peut renvoyer
+    # n'importe quelle casse.
+    assert is_junk(Path("/Volumes/CLE/desktop.ini"))
+    assert is_junk(Path("/Volumes/CLE/DESKTOP.INI"))
+    assert is_junk(Path("/Volumes/CLE/thumbs.db"))
+    assert is_junk(Path("/Volumes/CLE/.ds_store"))
+
+
+def test_corbeille_linux_par_nom_d_utilisateur():
+    # .Trash-1000 : un dossier, et le nom porte le numéro de l'utilisateur.
+    assert is_junk(Path("/Volumes/CLE/.Trash-1000"))
+    assert is_junk(Path("/Volumes/CLE/.trash-501"))
+
+
+def test_dossiers_proteges_reconnus_sans_casse():
+    assert is_protected_name(".Trashes")
+    assert is_protected_name(".trashes")
+    assert not is_protected_name(".Trash")      # signalé, mais supprimable
 
 
 def test_racines_refusees():
@@ -40,6 +67,21 @@ def test_scan_trouve_le_junk_et_ignore_les_dossiers_proteges():
         # Le dossier protégé est signalé, mais on n'entre pas dedans :
         # son .DS_Store interne n'est donc pas listé.
         assert noms == [".DS_Store", ".Spotlight-V100", "._vacances.jpg"], noms
+
+
+def test_scan_ne_liste_pas_le_contenu_des_corbeilles():
+    with tempfile.TemporaryDirectory() as tmp:
+        cle = Path(tmp)
+        (cle / ".Trash-1000" / "photos").mkdir(parents=True)
+        (cle / ".Trash-1000" / "photos" / "vieux.jpg").write_text("vieux")
+        (cle / ".Trash").mkdir()
+        (cle / ".Trash" / "notes.txt").write_text("notes")
+
+        noms = sorted(p.name for p in scan(cle))
+
+        # Les deux corbeilles sont signalées une fois, sans leur contenu :
+        # elles seront supprimées en entier.
+        assert noms == [".Trash", ".Trash-1000"], noms
 
 
 def test_delete_ne_touche_jamais_la_cle_elle_meme():
