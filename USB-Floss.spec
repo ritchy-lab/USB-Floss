@@ -55,10 +55,10 @@ app = BUNDLE(
     name='USB-Floss.app',
     icon='icon.icns',
     bundle_identifier='com.ritchy-lab.usb-floss',
-    version='1.3',
+    version='1.4',
     info_plist={
-        'CFBundleShortVersionString': '1.3',
-        'CFBundleVersion': '1.3',
+        'CFBundleShortVersionString': '1.4',
+        'CFBundleVersion': '1.4',
         'NSHumanReadableCopyright': '© 2026 ritchy-lab',
         'LSMinimumSystemVersion': '11.0',
     },

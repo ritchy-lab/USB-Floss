@@ -43,7 +43,23 @@ def test_corbeille_linux_par_nom_d_utilisateur():
 def test_dossiers_proteges_reconnus_sans_casse():
     assert is_protected_name(".Trashes")
     assert is_protected_name(".trashes")
-    assert not is_protected_name(".Trash")      # signalé, mais supprimable
+    assert is_protected_name(".Trash")          # corbeille Linux
+    assert is_protected_name(".Trash-1000")
+    assert not is_protected_name(".DS_Store")
+
+
+def test_delete_ne_vide_jamais_une_corbeille():
+    with tempfile.TemporaryDirectory() as tmp:
+        cle = Path(tmp)
+        for nom in (".Trash", ".Trash-1000", ".Trashes"):
+            corbeille = cle / nom
+            corbeille.mkdir()
+            (corbeille / "a_recuperer.jpg").write_text("à récupérer")
+
+            ok, ko = delete([corbeille], cle)
+
+            assert corbeille.exists(), nom
+            assert (corbeille / "a_recuperer.jpg").exists(), nom
 
 
 def test_racines_refusees():

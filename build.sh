@@ -15,7 +15,7 @@
 set -e
 
 cd "$(dirname "$0")"
-VERSION=1.3
+VERSION=1.4
 NOM="USB-Floss"
 TMP="$(mktemp -d)"
 DIST="$TMP/dist"

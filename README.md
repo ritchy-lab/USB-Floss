@@ -54,14 +54,13 @@ cachés invisibles :
 - `.DS_Store` — cache d'affichage du Finder
 - `._*` — métadonnées AppleDouble attachées à chaque fichier
 - `.Spotlight-V100/` — index de recherche Spotlight
-- `.Trashes/` — corbeille macOS
+- `.Trashes/` — corbeille macOS (jamais vidée par USB-Floss, voir plus bas)
 - `.fseventsd/` — journal du système de fichiers
 - `.DocumentRevisions-V100/` — historique des versions
 - `.apdisk`, `.VolumeIcon.icns`, `.localized`, `.AppleDB`, etc.
 
 Une clé qui fait la navette récolte aussi des fichiers venus de l'autre côté :
-`Thumbs.db` et `Desktop.ini` (Windows), `.Trash-1000` (Linux). USB-Floss les
-nettoie également.
+`Thumbs.db` et `Desktop.ini` (Windows). USB-Floss les nettoie également.
 
 Ces fichiers ne servent à rien sous Windows ou Linux. Ils encombrent
 la clé, polluent les listes de fichiers, et parfois empêchent une
@@ -123,20 +122,31 @@ indiquant son chemin :
 
     python3 usbfloss.py /Volumes/NOM_DU_GROS_DISQUE
 
-## Fichiers protégés par macOS
+## Dossiers protégés
 
-Certains dossiers créés par macOS sur une clé USB sont protégés par
-le système et ne peuvent pas être supprimés par un utilisateur normal :
+Certains dossiers sont détectés et affichés, mais **jamais** supprimés.
+
+D'abord ceux que macOS gère et recrée de toute façon au prochain branchement :
 
 - `.Spotlight-V100`
 - `.Trashes`
 - `.fseventsd`
 - `.DocumentRevisions-V100`
 
-USB-Floss les détecte et les affiche, mais les marque `(ignoré)` et
-ne tente pas de les supprimer. C'est normal : macOS les recréera de
-toute façon au prochain branchement, et ils ne gênent en rien
-l'utilisation de la clé sur un PC.
+Ensuite **toutes les corbeilles**, y compris celles des clés venues de Linux :
+
+- `.Trash`
+- `.Trash-1000`
+
+USB-Floss les marque `(ignoré)` et n'y touche pas. **Il ne vide jamais une
+corbeille** : son contenu reste récupérable, et vider une corbeille est une
+décision qui t'appartient, pas à un outil de nettoyage. Sur un Mac, les fichiers
+d'une corbeille Linux ne sont même pas visibles dans la Corbeille : les effacer
+ici les détruirait pour de bon.
+
+Conséquence à connaître : l'espace occupé par une corbeille n'est pas récupéré.
+Pour le libérer, vide la corbeille depuis Linux, ou supprime le dossier
+toi-même.
 
 ## L'aide
 

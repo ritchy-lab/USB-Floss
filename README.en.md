@@ -49,14 +49,13 @@ When you plug a USB drive into a Mac, macOS leaves hidden files on it:
 - `.DS_Store` — the Finder's display cache
 - `._*` — AppleDouble metadata attached to every file
 - `.Spotlight-V100/` — the Spotlight search index
-- `.Trashes/` — the macOS trash
+- `.Trashes/` — the macOS trash (never emptied by USB-Floss, see below)
 - `.fseventsd/` — the file system journal
 - `.DocumentRevisions-V100/` — the version history
 - `.apdisk`, `.VolumeIcon.icns`, `.localized`, `.AppleDB`, and others
 
 A drive that travels back and forth also picks up files from the other side:
-`Thumbs.db` and `Desktop.ini` (Windows), `.Trash-1000` (Linux). USB-Floss
-cleans those too.
+`Thumbs.db` and `Desktop.ini` (Windows). USB-Floss cleans those too.
 
 These files are useless under Windows or Linux. They clutter the drive, pollute
 file listings, and sometimes get in the way of a clean copy.
@@ -116,19 +115,31 @@ To target a large volume anyway, use the direct mode with its path:
 
     python3 usbfloss.py /Volumes/BIG_DISK_NAME
 
-## Files protected by macOS
+## Protected folders
 
-Some folders created by macOS on a USB drive are protected by the system and
-cannot be deleted by a normal user:
+Some folders are detected and listed, but **never** deleted.
+
+First the ones macOS manages and recreates anyway the next time the drive is
+plugged in:
 
 - `.Spotlight-V100`
 - `.Trashes`
 - `.fseventsd`
 - `.DocumentRevisions-V100`
 
-USB-Floss detects them and lists them, but marks them `(ignored)` and does not
-try to delete them. That is normal: macOS will recreate them the next time the
-drive is plugged in, and they do not get in the way on a PC.
+Then **every trash folder**, including those from Linux drives:
+
+- `.Trash`
+- `.Trash-1000`
+
+USB-Floss marks them `(ignored)` and leaves them alone. **It never empties a
+trash**: their contents stay recoverable, and emptying a trash is your decision,
+not a cleaning tool's. On a Mac, the files in a Linux trash are not even visible
+in the Trash: deleting them here would destroy them for good.
+
+One consequence to know about: the space taken by a trash folder is not
+reclaimed. To reclaim it, empty the trash from Linux, or delete the folder
+yourself.
 
 ## Help
 

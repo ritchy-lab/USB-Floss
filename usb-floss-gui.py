@@ -82,7 +82,7 @@ RESULTAT_DUREE = 6               # un message de résultat reste affiché 6 s
 # La liste vit dans le cœur (usbfloss.JUNK_DIRS) : on la lui demande, pour ne
 # pas la recopier ici et pour profiter de sa comparaison insensible à la casse.
 
-APP_VERSION = "1.3"
+APP_VERSION = "1.4"
 GITHUB_URL = "https://github.com/ritchy-lab/USB-Floss"
 SITE_URL = "https://ritchy-lab.github.io/"
 KO_FI_URL = "https://ko-fi.com/ritchy_lab"
@@ -240,6 +240,8 @@ HELP_CONTENT = {
         ("text", "Certains dossiers gérés par macOS (.Spotlight-V100,"),
         ("text", ".Trashes, .fseventsd) sont marqués « ignoré » et laissés"),
         ("text", "en place : ils ne gênent pas."),
+        ("text", "Les corbeilles ne sont jamais vidées : leur contenu reste"),
+        ("text", "récupérable."),
         ("space", ""),
         ("title2", "Limite de taille"),
         ("text", f"Seuls les volumes de moins de {MAX_VOLUME_SIZE_GB} Go sont"),
@@ -266,6 +268,8 @@ HELP_CONTENT = {
         ("text", "Some folders managed by macOS (.Spotlight-V100,"),
         ("text", ".Trashes, .fseventsd) are marked \u201cignored\u201d and left"),
         ("text", "in place: they are harmless."),
+        ("text", "Trash folders are never emptied: their contents stay"),
+        ("text", "recoverable."),
         ("space", ""),
         ("title2", "Size limit"),
         ("text", f"Only drives smaller than {MAX_VOLUME_SIZE_GB} GB are"),
@@ -297,6 +301,7 @@ class USBFlossApp(ctk.CTk):
         self.current_junk = []
         self._last_volumes_state = None
         self._last_junk_signature = None
+        self._scan_epoque = 0
         self._last_scan_duration = None
         self._results = queue.Queue()
         self._scan_running = False
@@ -760,13 +765,16 @@ class USBFlossApp(ctk.CTk):
 
     def _scan_worker(self, volume):
         debut = time.perf_counter()
+        # À quel « monde » appartient cette analyse : si un nettoyage a lieu
+        # entre-temps, le résultat devient périmé (voir _on_scan_done).
+        epoque = self._scan_epoque
         try:
             junk = scan(volume)
             self._results.put(
-                ("scan", volume, junk, None, time.perf_counter() - debut))
+                ("scan", volume, junk, None, time.perf_counter() - debut, epoque))
         except Exception as e:
             self._results.put(
-                ("scan", volume, None, e, time.perf_counter() - debut))
+                ("scan", volume, None, e, time.perf_counter() - debut, epoque))
 
     def _poll_results(self):
         if self._closing:
@@ -787,12 +795,17 @@ class USBFlossApp(ctk.CTk):
             if not self._closing:
                 self._after_poll = self.after(QUEUE_POLL_INTERVAL, self._poll_results)
 
-    def _on_scan_done(self, volume, junk, erreur, duree=None):
+    def _on_scan_done(self, volume, junk, erreur, duree=None, epoque=0):
         self._scan_running = False
         if duree is not None:
             self._last_scan_duration = duree
 
-        if erreur is not None:
+        if epoque != self._scan_epoque:
+            # Analyse lancée avant un nettoyage : sa liste est périmée. Sans ce
+            # garde-fou, elle réaffichait les fichiers qu'on venait de
+            # supprimer, juste sous le message « x élément(s) supprimé(s) ✓ ».
+            log.debug("Analyse périmée ignorée pour %s", volume)
+        elif erreur is not None:
             log.warning("Scan impossible sur %s : %s", volume, erreur)
         elif volume == self.current_volume and not self._busy:
             signature = tuple(sorted(str(p.relative_to(volume)) for p in junk))
@@ -903,6 +916,9 @@ class USBFlossApp(ctk.CTk):
 
     def _on_clean_done(self, volume, ok, ko, erreur, erreur_ejection):
         self._busy = False
+        # Toute analyse déjà lancée devient périmée : elle ne connaît pas les
+        # fichiers qu'on vient de supprimer.
+        self._scan_epoque += 1
         self._last_volumes_state = None
         self._last_junk_signature = None
         self._set_junk([])

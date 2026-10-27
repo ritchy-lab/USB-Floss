@@ -26,7 +26,6 @@ JUNK_FILES = {
     "Thumbs.db",
     "Desktop.ini",
     # Fichiers Linux / autres
-    ".Trash",
 }
 
 JUNK_DIRS = {
@@ -36,12 +35,15 @@ JUNK_DIRS = {
     ".TemporaryItems",
     ".DocumentRevisions-V100",
     ".AppleDB",
+    # Corbeille d'une clé Linux. Signalée, mais jamais vidée : voir
+    # is_protected_name().
+    ".Trash",
 }
 
 JUNK_PREFIXES = (
     "._",
-    # Corbeille d'une clé Linux : le nom porte le numéro de l'utilisateur
-    # (.Trash-1000, .Trash-501…). Un dossier, donc à traiter par préfixe.
+    # Corbeille d'une clé Linux, une par utilisateur (.Trash-1000, .Trash-501…).
+    # Signalée, mais jamais vidée : voir is_protected_name().
     ".Trash-",
 )
 
@@ -51,6 +53,11 @@ JUNK_PREFIXES = (
 _JUNK_FILES_LC = frozenset(nom.lower() for nom in JUNK_FILES)
 _JUNK_DIRS_LC = frozenset(nom.lower() for nom in JUNK_DIRS)
 _JUNK_PREFIXES_LC = tuple(prefixe.lower() for prefixe in JUNK_PREFIXES)
+
+# Corbeilles Linux par utilisateur : reconnues pour être signalées, jamais
+# supprimées. Elles portent un numéro d'utilisateur variable (.Trash-1000),
+# donc on les repère par préfixe.
+_PROTECTED_PREFIXES_LC = (".trash-",)
 
 # Sur macOS, les volumes externes sont montés dans /Volumes.
 VOLUMES_DIR = Path("/Volumes")
@@ -76,12 +83,19 @@ def _is_junk_name(name: str, is_dir: bool) -> bool:
 
 
 def is_protected_name(name: str) -> bool:
-    """True si ce nom désigne un dossier système géré par macOS.
+    """True si ce nom désigne un dossier à signaler mais jamais à supprimer.
 
-    Ces dossiers sont signalés dans la liste, mais jamais supprimés : ils ne
-    gênent pas, et macOS les recrée de toute façon au prochain branchement.
+    Deux familles : les dossiers gérés par macOS, et toutes les corbeilles
+    (macOS `.Trashes`, Linux `.Trash` et `.Trash-<uid>`).
+
+    Une corbeille contient des fichiers que l'utilisateur peut encore
+    récupérer : les effacer pour de bon n'est pas une décision qui revient à
+    une application de nettoyage. Sur une clé Linux branchée sur un Mac, ces
+    fichiers ne sont même pas visibles dans la corbeille du Mac — les détruire
+    en silence serait le pire des services.
     """
-    return name.lower() in _JUNK_DIRS_LC
+    bas = name.lower()
+    return bas in _JUNK_DIRS_LC or bas.startswith(_PROTECTED_PREFIXES_LC)
 
 
 def is_junk(path: Path) -> bool:
@@ -147,6 +161,12 @@ def delete(paths: list[Path], root: Path) -> tuple[int, int]:
             continue
         if not path.is_relative_to(root):
             print(f"  IGNORÉ   : {path} (hors de {root})")
+            ko += 1
+            continue
+        # Ceinture et bretelles : même si l'appelant n'a pas filtré, on ne vide
+        # jamais une corbeille ni un dossier du système.
+        if is_protected_name(path.name):
+            print(f"  IGNORÉ   : {path} (corbeille ou dossier système)")
             ko += 1
             continue
 
@@ -312,9 +332,16 @@ def main():
     print(f"{len(junk)} élément(s) parasite(s) trouvé(s) :\n")
     for path in junk:
         kind = "dossier" if path.is_dir() else "fichier"
-        print(f"  [{kind}] {path.relative_to(root)}")
+        marque = "   (ignoré : corbeille ou système)" if is_protected_name(path.name) else ""
+        print(f"  [{kind}] {path.relative_to(root)}{marque}")
 
     print()
+
+    # Les corbeilles et les dossiers système ne sont jamais supprimés.
+    a_supprimer = [p for p in junk if not is_protected_name(p.name)]
+    if not a_supprimer:
+        print("Rien à supprimer : tout ce qui a été trouvé est laissé en place.")
+        return
 
     if not args.delete:
         print("Mode aperçu — rien n'a été supprimé.")
@@ -328,7 +355,7 @@ def main():
             return
 
     print()
-    ok, ko = delete(junk, root)
+    ok, ko = delete(a_supprimer, root)
     print()
     print(f"Terminé : {ok} supprimé(s), {ko} échec(s).")
 
